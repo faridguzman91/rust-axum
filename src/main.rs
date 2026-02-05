@@ -1,9 +1,58 @@
-use axum::{Router, routing::get};
+use axum::{Json, Router, extract::Path, http::StatusCode, response::IntoResponse, routing::get};
+use serde_json::{Value, json};
 
-async fn health_check() {}
+#[derive(Debug)]
+enum ApiError {
+    NotFound,
+    InvalidInput(String),
+    InternalError,
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_message) = match self {
+            ApiError::NotFound => (StatusCode::NOT_FOUND, "Data not found".to_string()),
+            ApiError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg),
+            ApiError::InternalError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal server error".to_string(),
+            ),
+        };
+
+        let body = Json(json!({
+            "error": error_message,
+        }));
+        (status, body).into_response()
+    }
+}
+
+async fn health_check() -> impl IntoResponse {
+    Json(json!({
+        "status": "ok",
+        "message": "server is running"
+    }))
+}
+
+async fn list_users() -> Result<Json<Value>, ApiError> {
+    Err(ApiError::InternalError)
+}
+
+async fn get_user(Path(id): Path<u32>) -> Result<Json<Value>, ApiError> {
+    if id > 100 {
+        return Err(ApiError::NotFound);
+    }
+
+    Ok(Json(json!({
+    "id": id,
+    "name" : "user"
+    })))
+}
 
 fn create_app() -> Router {
-    Router::new().route("/health", get(health_check))
+    Router::new()
+        .route("/health", get(health_check))
+        .route("/users", get(list_users))
+        .route("/users/{id}", get(get_user))
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -16,5 +65,7 @@ async fn main() {
 
     println!("server running in http://localhost:3000");
 
-    axum::serve(listener, app).await.expect("failed to start server")
+    axum::serve(listener, app)
+        .await
+        .expect("failed to start server")
 }
