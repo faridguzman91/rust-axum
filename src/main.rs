@@ -69,3 +69,30 @@ async fn main() {
         .await
         .expect("failed to start server")
 }
+
+#[cfg(test)]
+mod tests {
+
+    use axum::{body::Body, http::{Request}};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_health_check() {
+        let app = create_app();
+        let request = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.collect().await.unwrap();
+        let json: Value = serde_json::from_slice(&body.to_bytes()).unwrap();
+        assert_eq!(json["status"], "ok");
+        assert_eq!(json["message"], "server is running")
+    }
+}
